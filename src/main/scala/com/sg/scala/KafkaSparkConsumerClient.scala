@@ -53,21 +53,22 @@ object KafkaSparkConsumerClient {
     log.info(s"kafka消费者配置文件内容：$kafkaConsumerProperties")
 
     //新建一个Streaming启动环境
-    log.info("创建sparkConf")
+    log.info("准备创建sparkConf")
     val sparkConf = new SparkConf().setAppName(KafkaSparkConsumerClient.getClass.getSimpleName)
     //本地启动设置这行代码，提交到MRS spark作业注释，local[*]代表本地启动cpu核数的线程跑任务
     if (sparkMaster != null && sparkMaster == "local[*]") {
       sparkConf.setMaster(sparkMaster)
     }
     //创建spark会话 设置流式批处理的处理间隔 单位s(秒)，即每隔多少秒从kafka拉数据，应该是代理了kafka消费者拉数据的间隔
-    log.info("创建streamingContext")
+    log.info("准备创建streamingContext")
     val ssc = new StreamingContext(sparkConf, Seconds(batchDuration.toInt))
 
     //kafka消息输入流
+    log.info("准备创建kafka消息输入流")
     val msgInputStream: InputDStream[ConsumerRecord[String, String]] = SparkUtil.createMsgInputStreamFromKafka(ssc, topics, kafkaConsumerProperties)
 
     //这里做数据计算的
-    log.info("数据处理算子")
+    log.info("准备数据处理算子")
     msgInputStream.foreachRDD(
       rdd => {
         //每个RDD分区

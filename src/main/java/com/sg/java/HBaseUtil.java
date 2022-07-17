@@ -24,20 +24,6 @@ public class HBaseUtil {
      * @throws IOException
      */
     public static Connection getHBaseConn(Properties prop) throws IOException {
-//        if (prop == null || prop.isEmpty()) {
-//            //加载默认配置文件
-//            InputStream is = ClassLoader.getSystemResourceAsStream(defaultHBasePropertiesPath);
-//            if (is == null) {
-//                throw new NullPointerException();
-//            } else {
-//                log.info("已读取到默认配置文件:" + defaultHBasePropertiesPath);
-//                prop = new Properties();
-//                prop.load(is);
-//                is.close();
-//            }
-//        } else {
-//            log.info("已传入自定义配置文件:" + prop);
-//        }
         Configuration hbaseConf = HBaseConfiguration.create();
         //zookeeper端口号
         log.info("设置zk端口号");
@@ -52,18 +38,18 @@ public class HBaseUtil {
         //注意事项：
         //ClassLoader.getSystemResourceAsStream 这个方法获取resource下的资源文件，在用java -jar启动时是可以读取到的，
         //但是用hadoop jar 启动是读取不到的，空指针。华为云客服说是hadoop启动会把InputStream替换成DFSinputstream
-        InputStream is = PropertiesUtil.createInputStreamFromResourceOrFile(prop.getProperty("hbase-site.path"));
+        InputStream is = PropertiesUtil.createInputStreamFromFileOrResource(prop.getProperty("hbase-site.path"));
         if (is == null) {
             log.info("无法读取hbase-site.xml，即将退出（这个情况在用hadoop jar启动jar包的情况下会出现，华为云客服工程师说是hadoop环境有个DFSInputStream会替换java.io.InputStream，暂不清楚原因）");
             System.exit(-1);
         }
         hbaseConf.addResource(is);
         log.info("加载hbase配置文件:core-site.xml");
-        hbaseConf.addResource(ClassLoader.getSystemResourceAsStream(prop.getProperty("core-site.path")));
+        hbaseConf.addResource(PropertiesUtil.createInputStreamFromFileOrResource(prop.getProperty("core-site.path")));
         log.info("加载hbase配置文件:hdfs-site.xml");
-        hbaseConf.addResource(ClassLoader.getSystemResourceAsStream(prop.getProperty("hdfs-site.path")));
+        hbaseConf.addResource(PropertiesUtil.createInputStreamFromFileOrResource(prop.getProperty("hdfs-site.path")));
 
-        log.info("正在获取hbase连接 zkQuorum:" + quorum + " zkClientPort:" + port);
+        log.info("正在获取hbase连接 zk-quorum:" + quorum + " zk-client-port:" + port);
         //获取hbase连接
         return ConnectionFactory.createConnection(hbaseConf);
     }

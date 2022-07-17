@@ -20,6 +20,9 @@ object WriteToHBaseTestDemo {
    * @param args 启动配置文件
    */
   def main(args: Array[String]): Unit = {
+
+    log.info("使用参数：<hbase.properties文件路径(可为空，为空默认加载内部配置文件)>")
+
     log.info("加载hbase配置")
     val prop = com.sg.java.PropertiesUtil.createAndLoadPropertiesFromFileOrResource(
       if (args != null && !args.isEmpty) args(0) else null,
@@ -62,12 +65,12 @@ object WriteToHBaseTestDemo {
     log.info("如需要查看执行结果，登录MRS master节点服务器，上面有hbase的客户端（可能没有，没有的话照着华为云文档下载下客户端），进入到hbase的bin目录启动交互shell，我这边的MRS里hbase在这个目录：opt/client/HBase/hbase/bin，然后当前目录有个hbase脚本，在当前目录输入：hbase shell 即可与hbase库交互，常用命令：list(查看所有表),scan 'tableName'（查询该表数据）")
     log.info("示例操作：")
     log.info(
-      """
-        |cd /opt/client/HBase/hbase/bin
-        |hbase shell
-        |list
-        |scan 'first'
-        |""".stripMargin)
+      s"""
+         |cd /opt/client/HBase/hbase/bin
+         |hbase shell
+         |list
+         |scan '$tableName'
+         |""".stripMargin)
     log.info("执行完毕，关闭hbase表和连接")
     table.close()
     conn.close()

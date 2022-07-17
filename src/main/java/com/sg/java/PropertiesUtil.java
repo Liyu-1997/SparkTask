@@ -36,6 +36,9 @@ public class PropertiesUtil {
     }
 
     public static Properties createPropertiesFromResource(String resourcePath) {
+        if (!resourcePath.endsWith(".properties")) {
+            throw new RuntimeException("该文件不是.properties配置文件");
+        }
         Properties prop = new Properties();
         try (InputStream is = ClassLoader.getSystemResourceAsStream(resourcePath)) {
             if (is != null) {
@@ -51,19 +54,19 @@ public class PropertiesUtil {
     }
 
     /**
-     * 把文件转成输入流，优先加载resource下的文件，没有再去本地文件系统找（暂未实现hdfs）
+     * 把文件转成输入流，优先加载本地文件系统文件，没有再加载resource下的文件（暂未实现hdfs）
      *
      * @param path 文件路径
      * @return 输入流
      */
-    public static InputStream createInputStreamFromResourceOrFile(String path) {
+    public static InputStream createInputStreamFromFileOrResource(String path) {
         InputStream is;
-        is = ClassLoader.getSystemResourceAsStream(path);
-        if (is == null) {
-            try {
-                is = new FileInputStream(path);
-            } catch (FileNotFoundException e) {
-                throw new RuntimeException(e);
+        try {
+            is = new FileInputStream(path);
+        } catch (FileNotFoundException e) {
+            is = ClassLoader.getSystemResourceAsStream(path);
+            if (is == null) {
+                throw new NullPointerException();
             }
         }
         return is;
