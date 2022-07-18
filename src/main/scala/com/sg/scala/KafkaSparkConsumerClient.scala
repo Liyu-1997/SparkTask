@@ -71,6 +71,9 @@ object KafkaSparkConsumerClient {
     log.info("准备数据处理算子")
     msgInputStream.foreachRDD(
       rdd => {
+        //手动维护偏移量
+        //获取偏移量
+        //        val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
         //每个RDD分区
         rdd.foreachPartition(
           //消息迭代器
@@ -99,6 +102,8 @@ object KafkaSparkConsumerClient {
             //            conn.close()
           }
         )
+        //提交偏移量
+        //        msgInputStream.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)
       }
     )
     ssc

@@ -13,5 +13,11 @@ public class ResourcePath {
 
     public static final String kafka_consumer_properties = "kafka-consumer.properties";
 
+    public static final String redis_properties = "redis.properties";
+
+    public static final String dws_business_jdbc_properties = "dws.business.jdbc.properties";
+
+    public static final String dws_data_jdbc_properties = "dws.data.jdbc.properties";
+
 
 }
