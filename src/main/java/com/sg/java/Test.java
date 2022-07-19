@@ -7,10 +7,4 @@ public class Test {
 
     private static final Logger log = LoggerFactory.getLogger(Test.class);
 
-
-    public static void main(String[] args) {
-        log.info("123");
-        System.out.println(123);
-    }
-
 }
