@@ -40,10 +40,13 @@ public class KafkaConsumerClient {
             log.info("单次消息拉取数据条数:{}", prop.getProperty("max.poll.records"));
             log.info("订阅主题：{}", "cms_volt_curve");
             consumers.parallelStream().forEach(consumer -> {
+                String exactName = "consumer" + Thread.currentThread().getName();
                 consumer.subscribe(Collections.singletonList("cms_volt_curve"));
                 List<Put> puts = new ArrayList<>();
                 while (true) {
+                    log.info("消费者" + exactName + "正在拉取数据");
                     ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(interval));
+                    log.info("此次拉取消息条数：{}", records.count());
                     if (!records.isEmpty()) {
                         try {
                             Connection conn = HBaseUtil.getHBaseConn(PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties));
@@ -100,7 +103,10 @@ public class KafkaConsumerClient {
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
-                    } else break;
+                    } else {
+                        log.info("{}s未拉取到数据，关闭consumer", interval);
+                        break;
+                    }
                 }
             });
         }
