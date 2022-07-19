@@ -74,7 +74,7 @@ object KafkaSparkConsumerClient {
 
     //kafka安全模式认证连接
     log.info("kafka安全模式认证连接")
-    SecurityPrepare.kerberosLogin()
+    SecurityPrepare.cqEcsKerberosLogin()
     //kafka消息输入流
     log.info("准备创建kafka消息输入流")
     val msgInputStream: InputDStream[ConsumerRecord[String, String]] = SparkUtil.createMsgInputStreamFromKafka(ssc, topics, kafkaConsumerProperties)
