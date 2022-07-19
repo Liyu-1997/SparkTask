@@ -19,5 +19,4 @@ public class ResourcePath {
 
     public static final String dws_data_jdbc_properties = "dws.data.jdbc.properties";
 
-
 }

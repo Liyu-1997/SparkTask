@@ -1,6 +1,7 @@
 package com.sg.java;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 
 public class JSONUtil {
 
@@ -16,6 +17,10 @@ public class JSONUtil {
 
     public static <T> T fromJson(String json, Class<T> typeOfT) {
         return gson.fromJson(json, typeOfT);
+    }
+
+    public static JsonObject toJsonObject(String json) {
+        return gson.fromJson(json, JsonObject.class);
     }
 
 }

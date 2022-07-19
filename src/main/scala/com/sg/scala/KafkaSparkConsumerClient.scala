@@ -1,14 +1,19 @@
 package com.sg.scala
 
-import com.sg.java.{KafkaProducerClient, ResourcePath}
+import com.sg.java.security.SecurityPrepare
+import com.sg.java.{HBaseUtil, JSONUtil, KafkaProducerClient, ResourcePath}
+import org.apache.hadoop.hbase.client.{HTable, Put}
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.hbase.{HColumnDescriptor, HTableDescriptor, TableName}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.dstream.InputDStream
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.util.Random
+import java.util
 import java.util.function.Supplier
+import java.util.{Random, UUID}
 
 /**
  * spark消费kafka客户端
@@ -19,7 +24,7 @@ object KafkaSparkConsumerClient {
 
   def main(args: Array[String]): Unit = {
     //模拟生产者生产数据，有生产者则可注释
-    runProducers()
+    //    runProducers()
     //创建spark任务并返回context（context就是一个会话周期）
     val ssc = createSparkTask(args)
     //启动任务
@@ -44,13 +49,17 @@ object KafkaSparkConsumerClient {
     val batchDuration = kafkaSparkStreamingProperties.getProperty("batch-duration", "5")
     val topics = kafkaSparkStreamingProperties.getProperty("topics")
     val consumerPropertiesPath = kafkaSparkStreamingProperties.getProperty("consumer.properties.path")
+    val hbasePropertiesPath = kafkaSparkStreamingProperties.getProperty("hbase.properties.path")
     log.info(s"spark master节点地址sparkMaster：$sparkMaster")
     log.info(s"spark流式消费批次间隔batchDuration：$batchDuration")
     log.info(s"订阅的主题topics：$topics")
     log.info(s"kafka消费者配置文件路径consumerPropertiesPath：$consumerPropertiesPath")
+    log.info(s"hbase配置文件路径hbasePropertiesPath：$hbasePropertiesPath")
 
     val kafkaConsumerProperties = com.sg.java.PropertiesUtil.createAndLoadPropertiesFromFileOrResource(consumerPropertiesPath, ResourcePath.kafka_consumer_properties)
     log.info(s"kafka消费者配置文件内容：$kafkaConsumerProperties")
+    val hbaseProperties = com.sg.java.PropertiesUtil.createAndLoadPropertiesFromFileOrResource(hbasePropertiesPath, ResourcePath.hbase_properties)
+    log.info(s"hbase配置文件内容：$kafkaConsumerProperties")
 
     //新建一个Streaming启动环境
     log.info("准备创建sparkConf")
@@ -63,9 +72,30 @@ object KafkaSparkConsumerClient {
     log.info("准备创建streamingContext")
     val ssc = new StreamingContext(sparkConf, Seconds(batchDuration.toInt))
 
+    //kafka安全模式认证连接
+    log.info("kafka安全模式认证连接")
+    SecurityPrepare.kerberosLogin()
     //kafka消息输入流
     log.info("准备创建kafka消息输入流")
     val msgInputStream: InputDStream[ConsumerRecord[String, String]] = SparkUtil.createMsgInputStreamFromKafka(ssc, topics, kafkaConsumerProperties)
+
+
+    val conn = HBaseUtil.getHBaseConn(hbaseProperties)
+    val admin = conn.getAdmin
+
+    //当前只要用采电压
+    for (name <- hbaseProperties.getProperty("yc.topics").split(",") if name == "cms_volt_curve") {
+      //todo
+    }
+
+    //建表 用电信息采集系统（用采）
+
+    val tableName = "yc"
+    if (!admin.isTableAvailable(TableName.valueOf(tableName))) {
+      val hbaseTable = new HTableDescriptor(TableName.valueOf(tableName))
+      hbaseTable.addFamily(new HColumnDescriptor("info"))
+      admin.createTable(hbaseTable)
+    }
 
     //这里做数据计算的
     log.info("准备数据处理算子")
@@ -82,24 +112,29 @@ object KafkaSparkConsumerClient {
             iterator.foreach(cr => {
               println(s"消费者客户端消费消息 topic:${cr.topic()}\tpartition:${cr.partition}\toffset:${cr.offset}\tvalue:${cr.value}")
             })
-            //            //封装好要存储的数据
-            //            val puts: Iterator[Put] = iterator.map(cr => {
-            //              //构造参数：rowKey
-            //              val put = new Put(Bytes.toBytes(s"spark_put_${UUID.randomUUID().toString}"))
-            //              //添加列数据，指定列族，具体列，值,多个列有值就addColumn多次
-            //              put.addColumn(Bytes.toBytes("info1"), Bytes.toBytes("name"), Bytes.toBytes(s"${cr.value()}"))
-            //              put.addColumn(Bytes.toBytes("info2"), Bytes.toBytes("address"), Bytes.toBytes(s"${cr.value()}"))
-            //            })
-            //            //创建一个hbase连接
-            //            val conn = HBaseUtil.getHBaseConn(null)
-            //            val table: HTable = conn.getTable(TableName.valueOf("first")).asInstanceOf[HTable]
-            //            val list = new util.ArrayList[Put]()
-            //            puts.foreach(list.add)
-            //            log.info("正在写入hbase")
-            //            table.put(list)
-            //            log.info("关闭连接")
-            //            table.close()
-            //            conn.close()
+            //封装好要存储的数据
+            val puts: Iterator[Put] = iterator.map(cr => {
+
+              val jo = JSONUtil.toJsonObject(cr.value())
+              val rowKey = jo.get("id").getAsInt
+
+              //构造参数：rowKey
+              val put = new Put(Bytes.toBytes(s"spark_put_${UUID.randomUUID().toString}"))
+              //添加列数据，指定列族，具体列，值,多个列有值就addColumn多次
+              put.addColumn(Bytes.toBytes("info1"), Bytes.toBytes("name"), Bytes.toBytes(s"${cr.value()}"))
+              put.addColumn(Bytes.toBytes("info2"), Bytes.toBytes("address"), Bytes.toBytes(s"${cr.value()}"))
+            })
+
+            //创建一个hbase连接
+            val conn = HBaseUtil.getHBaseConn(hbaseProperties)
+            val table: HTable = conn.getTable(TableName.valueOf("first")).asInstanceOf[HTable]
+            val list = new util.ArrayList[Put]()
+            puts.foreach(list.add)
+            log.info("正在写入hbase")
+            table.put(list)
+            log.info("关闭连接")
+            table.close()
+            conn.close()
           }
         )
         //提交偏移量
