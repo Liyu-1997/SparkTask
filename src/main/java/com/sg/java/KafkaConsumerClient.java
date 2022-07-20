@@ -15,11 +15,16 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
 
+import static com.sg.java.Constant.HBASE_NAMESPACE;
+
 public class KafkaConsumerClient {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumerClient.class);
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+
+        String cms_volt_curve = "cms_volt_curve";
+
         long start = System.currentTimeMillis();
         log.info("重庆客户kafka组件kerberos认证文件配置");
         SecurityPrepare.cqEcsKerberosLogin();
@@ -39,36 +44,36 @@ public class KafkaConsumerClient {
             log.info("消费者组：{}", prop.getProperty("group.id"));
             log.info("单次消息拉取最大等待时间：{}s", interval);
             log.info("单次消息拉取数据条数:{}", prop.getProperty("max.poll.records"));
-            log.info("订阅主题：{}", "cms_volt_curve");
+            log.info("订阅主题：{}", cms_volt_curve);
 
-            TableName hbaseTable_cms_volt_curve = TableName.valueOf("cms_volt_curve");
+            TableName hbaseTable_cms_volt_curve = TableName.valueOf(HBASE_NAMESPACE + ":" + cms_volt_curve);
 
-            log.info("建表：{}如果不存在", "cms_volt_curve");
-
-            try (Connection conn = HBaseUtil.getHBaseConn(PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties))) {
-                Admin admin = conn.getAdmin();
-                if (!admin.isTableAvailable(hbaseTable_cms_volt_curve)) {
-                    admin.createTable(TableDescriptorBuilder.newBuilder(hbaseTable_cms_volt_curve)//指定表名
-                            .setColumnFamilies(Lists.newArrayList(
-                                    ColumnFamilyDescriptorBuilder.newBuilder(Bytes.toBytes("info"))
-                                            //指定最多存储多少个历史版本数据
-                                            .setMaxVersions(3)
-                                            .build()
-                            ))
-                            .build());
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            log.info("hbase建表：{}", cms_volt_curve);
+            Connection createTableConn = HBaseUtil.getHBaseConn(PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties));
+            Admin admin = createTableConn.getAdmin();
+            if (!admin.isTableAvailable(hbaseTable_cms_volt_curve)) {
+                admin.createTable(TableDescriptorBuilder.newBuilder(hbaseTable_cms_volt_curve)//指定表名
+                        .setColumnFamilies(Lists.newArrayList(
+                                ColumnFamilyDescriptorBuilder.newBuilder(Bytes.toBytes("info"))
+                                        //指定最多存储多少个历史版本数据
+                                        .setMaxVersions(3)
+                                        .build()
+                        ))
+                        .build());
+                log.info("hbase表：{}创建成功", cms_volt_curve);
+            } else {
+                log.info("hbase表：{}已存在", cms_volt_curve);
             }
+            createTableConn.close();
 
             consumers.parallelStream().forEach(consumer -> {
-                String exactName = "consumer" + Thread.currentThread().getName();
-                consumer.subscribe(Collections.singletonList("cms_volt_curve"));
+                String exactName = "consumer-" + Thread.currentThread().getName();
+                consumer.subscribe(Collections.singletonList(cms_volt_curve));
                 List<Put> puts = new ArrayList<>();
                 while (true) {
-                    log.info("消费者" + exactName + "正在拉取数据");
+                    log.info(exactName + "正在拉取数据");
                     ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(interval));
-                    log.info("此次拉取消息条数：{}", records.count());
+                    log.info(exactName + "此次拉取消息条数：{}", records.count());
                     if (!records.isEmpty()) {
                         try (Connection conn = HBaseUtil.getHBaseConn(PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties))) {
                             HTable table = (HTable) conn.getTable(hbaseTable_cms_volt_curve);
@@ -77,7 +82,7 @@ public class KafkaConsumerClient {
                             Map<String, String> history_rowKey_COL_TIME_U = new HashMap<>();
                             records.forEach(cr ->
                                     {
-                                        log.info("消费者客户端消费消息 " +
+                                        log.info(exactName + "消费消息 " +
                                                  "topic:" + cr.topic() + "\t" +
                                                  "partition:" + cr.partition() + "\t" +
                                                  "offset:" + cr.offset() + "\t" +
@@ -108,20 +113,20 @@ public class KafkaConsumerClient {
                                 put.addColumn(Bytes.toBytes("info"), Bytes.toBytes("COL_TIME-U"), Bytes.toBytes(COl_TIME_U));
                                 puts.add(put);
                             });
-                            log.info("写入hbase puts.size：{} put.example：{}",puts.size(),puts.get(0).toString());
+                            log.info(exactName + "写入hbase puts.size：{} put.example：{}", puts.size(), puts.get(0).toString());
                             table.put(puts);
                             puts.clear();
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
                     } else {
-                        log.info("{}s未拉取到数据，关闭consumer", interval);
+                        log.info(exactName + " {}s 未拉取到数据，关闭", interval);
                         break;
                     }
                 }
             });
         }
-        log.info("consumer关闭");
+        log.info("consumers全部关闭");
         log.info("耗时：{}s", (System.currentTimeMillis() - start) / 1000);
     }
 

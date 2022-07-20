@@ -25,8 +25,6 @@ public class HBaseUtil {
      */
     public static Connection getHBaseConn(Properties prop) {
         Configuration hbaseConf = HBaseConfiguration.create();
-
-
         //zookeeper端口号
         log.info("设置zk端口号");
         String port = prop.getProperty("zookeeper.client.port");
@@ -58,6 +56,25 @@ public class HBaseUtil {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static void setBasicHBaseConf(Configuration hbaseConf) {
+         Properties prop = PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties);
+        //zookeeper端口号
+        log.info("设置zk端口号");
+        String port = prop.getProperty("zookeeper.client.port");
+        hbaseConf.set(HConstants.ZOOKEEPER_CLIENT_PORT, port);
+        String quorum = prop.getProperty("zookeeper.quorum");
+        //zookeeper集群实例地址，和kafka brokers一样，即实例的ip集合，多个逗号隔开
+        log.info("设置zk地址");
+        hbaseConf.set(HConstants.ZOOKEEPER_QUORUM, quorum);
+        //加载hbase的配置
+        log.info("加载hbase配置文件:hbase-site.xml");
+        hbaseConf.addResource(PropertiesUtil.createInputStreamFromFileOrResource(prop.getProperty("hbase-site.path")));
+        log.info("加载hbase配置文件:core-site.xml");
+        hbaseConf.addResource(PropertiesUtil.createInputStreamFromFileOrResource(prop.getProperty("core-site.path")));
+        log.info("加载hbase配置文件:hdfs-site.xml");
+        hbaseConf.addResource(PropertiesUtil.createInputStreamFromFileOrResource(prop.getProperty("hdfs-site.path")));
     }
 
 }
