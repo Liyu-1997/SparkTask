@@ -30,7 +30,7 @@ public class RelCal {
         SparkConf conf = new SparkConf().setMaster("local[*]").setAppName("RelCal");
         conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
         conf.set("spark.kryo.registrator", "com.huawei.bigdata.spark.examples.MyRegistrator");
-
+        System.out.println();
         JavaSparkContext jsc = new JavaSparkContext(conf);
 
         Configuration hbConf = HBaseConfiguration.create(jsc.hadoopConfiguration());
