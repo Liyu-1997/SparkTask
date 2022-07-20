@@ -23,8 +23,10 @@ public class HBaseUtil {
      * @return
      * @throws IOException
      */
-    public static Connection getHBaseConn(Properties prop) throws IOException {
+    public static Connection getHBaseConn(Properties prop) {
         Configuration hbaseConf = HBaseConfiguration.create();
+
+
         //zookeeper端口号
         log.info("设置zk端口号");
         String port = prop.getProperty("zookeeper.client.port");
@@ -51,7 +53,11 @@ public class HBaseUtil {
 
         log.info("正在获取hbase连接 zk-quorum:" + quorum + " zk-client-port:" + port);
         //获取hbase连接
-        return ConnectionFactory.createConnection(hbaseConf);
+        try {
+            return ConnectionFactory.createConnection(hbaseConf);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

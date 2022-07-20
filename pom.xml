@@ -157,6 +157,12 @@
             <version>${hbase.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-mapreduce</artifactId>
+            <version>${hbase.version}</version>
+        </dependency>
+
         <!--         postgresql客户端(驱动)这个是开源的，用下面dws集成的集合-->
         <!--         https://mvnrepository.com/artifact/org.postgresql/postgresql -->
 <!--        <dependency>-->
