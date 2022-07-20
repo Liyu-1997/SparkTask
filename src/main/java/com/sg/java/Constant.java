@@ -9,7 +9,7 @@ public class Constant {
     public static void main(String[] args) {
         LocalDate now = LocalDate.now();
         LocalDate lastDay = LocalDate.of(now.getYear(), now.getMonth(), now.getDayOfMonth() - 1);
-        System.out.println(lastDay.toString().replace('-',Character.MIN_VALUE));
+        System.out.println(lastDay.toString().replace('-', Character.MIN_VALUE));
     }
 
 }

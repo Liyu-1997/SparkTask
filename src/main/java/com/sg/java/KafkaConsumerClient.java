@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
+import java.util.stream.IntStream;
 
 import static com.sg.java.Constant.HBASE_NAMESPACE;
 
@@ -31,49 +32,45 @@ public class KafkaConsumerClient {
         log.info("读取kafka消费者配置文件");
         Properties prop = PropertiesUtil.createAndLoadPropertiesFromFileOrResource(null, ResourcePath.kafka_consumer_properties);
         log.info("kafka消费者配置文件内容：" + prop.toString());
-        try (KafkaConsumer<String, String> consumer_1 = new KafkaConsumer<>(prop);
-             KafkaConsumer<String, String> consumer_2 = new KafkaConsumer<>(prop);
-             KafkaConsumer<String, String> consumer_3 = new KafkaConsumer<>(prop)) {
-            int interval = 5;
-            List<KafkaConsumer<String, String>> consumers = new ArrayList<>();
-            consumers.add(consumer_1);
-            consumers.add(consumer_2);
-            consumers.add(consumer_3);
-            log.info("创建3个consumer");
-            log.info("kafka服务端地址：{}", prop.getProperty("bootstrap.servers"));
-            log.info("消费者组：{}", prop.getProperty("group.id"));
-            log.info("单次消息拉取最大等待时间：{}s", interval);
-            log.info("单次消息拉取数据条数:{}", prop.getProperty("max.poll.records"));
-            log.info("订阅主题：{}", cms_volt_curve);
 
-            TableName hbaseTable_cms_volt_curve = TableName.valueOf(HBASE_NAMESPACE + ":" + cms_volt_curve);
+        int interval = 30;
+        log.info("创建3个consumer");
+        log.info("kafka服务端地址：{}", prop.getProperty("bootstrap.servers"));
+        log.info("消费者组：{}", prop.getProperty("group.id"));
+        log.info("单次消息拉取最大等待时间：{}s", interval);
+        log.info("单次消息拉取数据条数:{}", prop.getProperty("max.poll.records"));
+        log.info("订阅主题：{}", cms_volt_curve);
 
-            log.info("hbase建表：{}", cms_volt_curve);
-            Connection createTableConn = HBaseUtil.getHBaseConn(PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties));
-            Admin admin = createTableConn.getAdmin();
-            if (!admin.isTableAvailable(hbaseTable_cms_volt_curve)) {
-                admin.createTable(TableDescriptorBuilder.newBuilder(hbaseTable_cms_volt_curve)//指定表名
-                        .setColumnFamilies(Lists.newArrayList(
-                                ColumnFamilyDescriptorBuilder.newBuilder(Bytes.toBytes("info"))
-                                        //指定最多存储多少个历史版本数据
-                                        .setMaxVersions(3)
-                                        .build()
-                        ))
-                        .build());
-                log.info("hbase表：{}创建成功", cms_volt_curve);
-            } else {
-                log.info("hbase表：{}已存在", cms_volt_curve);
-            }
-            createTableConn.close();
+        TableName hbaseTable_cms_volt_curve = TableName.valueOf(HBASE_NAMESPACE + ":" + cms_volt_curve);
 
-            consumers.parallelStream().forEach(consumer -> {
-                String exactName = "consumer-" + Thread.currentThread().getName();
-                consumer.subscribe(Collections.singletonList(cms_volt_curve));
+        log.info("hbase建表：{}", cms_volt_curve);
+        Connection createTableConn = HBaseUtil.getHBaseConn(PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties));
+        Admin admin = createTableConn.getAdmin();
+        if (!admin.isTableAvailable(hbaseTable_cms_volt_curve)) {
+            admin.createTable(TableDescriptorBuilder.newBuilder(hbaseTable_cms_volt_curve)//指定表名
+                    .setColumnFamilies(Lists.newArrayList(
+                            ColumnFamilyDescriptorBuilder.newBuilder(Bytes.toBytes("info"))
+                                    //指定最多存储多少个历史版本数据
+                                    .setMaxVersions(3)
+                                    .build()
+                    ))
+                    .build());
+            log.info("hbase表：{}创建成功", cms_volt_curve);
+        } else {
+            log.info("hbase表：{}已存在", cms_volt_curve);
+        }
+        createTableConn.close();
+
+        IntStream.range(0, 3).parallel().forEach(i -> {
+            String consumerName = "consumer-" + i + "-" + Thread.currentThread().getName();
+            try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(prop)) {
+                consumer.subscribe(Collections.singleton(cms_volt_curve));
                 List<Put> puts = new ArrayList<>();
+                log.info(consumerName + "开始循环拉取数据消费");
                 while (true) {
-                    log.info(exactName + "正在拉取数据");
+                    log.info(consumerName + "正在拉取数据");
                     ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(interval));
-                    log.info(exactName + "此次拉取消息条数：{}", records.count());
+                    log.info(consumerName + "此次拉取消息条数：{}", records.count());
                     if (!records.isEmpty()) {
                         try (Connection conn = HBaseUtil.getHBaseConn(PropertiesUtil.createPropertiesFromResource(ResourcePath.hbase_properties))) {
                             HTable table = (HTable) conn.getTable(hbaseTable_cms_volt_curve);
@@ -82,7 +79,7 @@ public class KafkaConsumerClient {
                             Map<String, String> history_rowKey_COL_TIME_U = new HashMap<>();
                             records.forEach(cr ->
                                     {
-                                        log.info(exactName + "消费消息 " +
+                                        log.info(consumerName + "消费消息 " +
                                                  "topic:" + cr.topic() + "\t" +
                                                  "partition:" + cr.partition() + "\t" +
                                                  "offset:" + cr.offset() + "\t" +
@@ -98,7 +95,10 @@ public class KafkaConsumerClient {
                             );
                             //查询此次数据是否有历史数据
                             Result[] results = table.get(gets);
-                            Arrays.stream(results).parallel().forEach(result -> history_rowKey_COL_TIME_U.put(new String(result.getRow()), new String(result.getValue(Bytes.toBytes("info"), Bytes.toBytes("COL_TIME-U")))));
+
+                            if (results != null && results.length != 0) {
+                                Arrays.stream(results).parallel().forEach(result -> history_rowKey_COL_TIME_U.put(new String(result.getRow()), new String(result.getValue(Bytes.toBytes("info"), Bytes.toBytes("COL_TIME-U")))));
+                            }
 
                             current_rowKey_JsonObject.forEach((rowKey, jo) -> {
                                 String COl_TIME_U = jo.get("COL_TIME").getAsString() + ":" + jo.get("U").getAsString();
@@ -113,19 +113,19 @@ public class KafkaConsumerClient {
                                 put.addColumn(Bytes.toBytes("info"), Bytes.toBytes("COL_TIME-U"), Bytes.toBytes(COl_TIME_U));
                                 puts.add(put);
                             });
-                            log.info(exactName + "写入hbase puts.size：{} put.example：{}", puts.size(), puts.get(0).toString());
+                            log.info(consumerName + "写入hbase puts.size：{} put.example：{}", puts.size(), puts.get(0).toString());
                             table.put(puts);
                             puts.clear();
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
                     } else {
-                        log.info(exactName + " {}s 未拉取到数据，关闭", interval);
+                        log.info(consumerName + " {}s 未拉取到数据，关闭", interval);
                         break;
                     }
                 }
-            });
-        }
+            }
+        });
         log.info("consumers全部关闭");
         log.info("耗时：{}s", (System.currentTimeMillis() - start) / 1000);
     }
